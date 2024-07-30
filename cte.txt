@@ -1,0 +1,41 @@
+CREATE OR REPLACE PROCEDURE MY_DATABASE.PUBLIC.SP_CTE()
+RETURNS TABLE(id NUMBER, name VARCHAR, value NUMBER, description VARCHAR, type VARCHAR, category VARCHAR)
+LANGUAGE SQL
+AS 
+$$
+  DECLARE
+    res RESULTSET;
+    sql_query VARCHAR;
+BEGIN
+    
+    sql_query := 'WITH cte1 AS (
+        SELECT id, name, value, category
+        FROM MY_DATABASE.PUBLIC.source_table1
+        WHERE category = ''A''
+    ),
+    cte2 AS (
+        SELECT cte1.id, cte1.name, cte1.value, cte1.category, source_table2.description, source_table2.type
+        FROM cte1
+        LEFT JOIN MY_DATABASE.PUBLIC.source_table2 ON cte1.id = source_table2.id
+    ),
+    cte3 AS (
+        SELECT id, name, SUM(value) AS total_value, description, type, category
+        FROM cte2
+        GROUP BY id, name, description, type, category
+    ),
+    cte4 AS (
+        SELECT id, name, total_value AS value, description, type, category
+        FROM cte3
+        WHERE total_value > 10
+    )
+     SELECT * FROM cte4';
+    res := (EXECUTE IMMEDIATE :sql_query);
+    RETURN TABLE(res);
+END;
+$$;
+
+select * from MY_DATABASE.PUBLIC.temp_table;
+call  MY_DATABASE.PUBLIC.SP_CTE();
+
+
+        

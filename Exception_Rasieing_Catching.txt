@@ -1,0 +1,144 @@
+/*
+  Custome Exception number between -20000 to -20999. Default exception number is -20000.
+  Syntax = my_exception EXCEPTION (-20002, 'Raised MY_EXCEPTION.');
+  variable SQLCODE => It define the Exception Number.(return code)
+  Variable SQLERRM => It store the user define exception(return what type of exception).
+  variable SQLSTATE => It return the response from DB(Warning'W', Success's', Nodata'N', Exception'X')[return state(complie error, numeric error)].
+*/
+-- link https://thinketl.com/exceptions-in-snowflake-stored-procedures/
+
+/*
+   Raising an exception.
+ */
+CREATE OR REPLACE PROCEDURE MY_DATABASE.ORDER_BASE.sp_raise_exception(var number)
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+DECLARE
+  my_sp_exception1 EXCEPTION (-20001, 'Raised user defined exception MY_SP_EXCEPTION1.');
+  my_sp_exception2 EXCEPTION (-20002, 'Raised user defined exception MY_SP_EXCEPTION2.');
+BEGIN
+  IF (var=0) THEN
+    RAISE my_sp_exception1;
+  ELSEIF (var=1) THEN
+    RAISE my_sp_exception2;
+  END IF;
+  RETURN var;
+EXCEPTION
+ WHEN my_sp_exception1 THEN
+    RETURN SQLSTATE||':'||SQLCODE||':'||SQLERRM;
+ WHEN my_sp_exception2 THEN
+    RETURN SQLSTATE||':'||SQLCODE||':'||SQLERRM;
+END;
+$$
+;
+
+CALL MY_DATABASE.ORDER_BASE.sp_raise_exception(2);
+
+
+
+
+CREATE OR REPLACE TABLE MY_DATABASE.ORDER_BASE.exceptions (
+    sql_state number,
+    error_number number,
+    sql_err_msg STRING
+);
+select * from MY_DATABASE.ORDER_BASE.exceptions;
+insert into MY_DATABASE.ORDER_BASE.exceptions(error_message)
+values(7);
+
+CREATE OR REPLACE PROCEDURE MY_DATABASE.ORDER_BASE.log_exception (
+    sql_state number,
+    error_number number,
+    sql_err_msg STRING
+)
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+BEGIN
+ INSERT INTO MY_DATABASE.ORDER_BASE.exceptions(sql_state, error_number, sql_err_msg )
+    VALUES (:sql_state, :error_number, :sql_err_msg);
+    RETURN 'Exception logged';
+END;
+$$;
+/* 
+  Catching an Exception.
+    variable SQLCODE => It return code
+    Variable SQLERRM => return what type of exception
+    variable SQLSTATE => return state(complie error, numeric error).
+    STATEMENT_ERROR => complie error
+    EXPRESSION_ERROR => type error
+    OTHER => unexcepted error
+*/
+CREATE OR REPLACE PROCEDURE MY_DATABASE.ORDER_BASE.build_other_exception()
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+DECLARE
+  var1 NUMBER;
+BEGIN
+  var1 := 1/0;
+  RETURN var1;
+EXCEPTION
+  WHEN OTHER THEN
+   // CALL MY_DATABASE.ORDER_BASE.log_exception(SQLCODE);
+ EXECUTE IMMEDIATE 
+      'CALL MY_DATABASE.ORDER_BASE.log_exception(' ||
+      ''''||SQLSTATE||''', '||SQLCODE||', '||''''||SQLERRM||''')';
+    RETURN 'OTHER_ERROR:'||SQLSTATE||':'||SQLCODE||':'||SQLERRM;
+END;
+$$;
+
+call MY_DATABASE.ORDER_BASE.build_other_exception();
+select * from MY_DATABASE.ORDER_BASE.exceptions;
+call MY_DATABASE.ORDER_BASE.log_exception();
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+CREATE OR REPLACE PROCEDURE MY_DATABASE.PUBLIC.SP_CTE()
+RETURNS TABLE(id NUMBER, name VARCHAR, value NUMBER, description VARCHAR, type VARCHAR, category VARCHAR)
+LANGUAGE SQL
+AS 
+$$
+  DECLARE
+    res RESULTSET;
+    sql_query VARCHAR;
+BEGIN
+    
+    sql_query := 'WITH cte1 AS (
+        SELECT id, name, value, category
+        FROM MY_DATABASE.PUBLIC.source_table1
+        WHERE category = ''A''
+    ),
+    cte2 AS (
+        SELECT cte1.id, cte1.name, cte1.value, cte1.category, source_table2.description, source_table2.type
+        FROM cte1
+        LEFT JOIN MY_DATABASE.PUBLIC.source_table2 ON cte1.id = source_table2.id
+    ),
+    cte3 AS (
+        SELECT id, name, SUM(value) AS total_value, description, type, category
+        FROM cte2
+        GROUP BY id, name, description, type, category
+    ),
+    cte4 AS (
+        SELECT id, name, total_value AS value, description, type, category
+        FROM cte3
+        WHERE total_value > 10
+    )
+     SELECT * FROM cte4';
+    res := (EXECUTE IMMEDIATE :sql_query);
+    RETURN TABLE(res);
+END;
+$$;
+
+select * from MY_DATABASE.PUBLIC.temp_table;
+call  MY_DATABASE.PUBLIC.SP_CTE();
+
+
+
+
+

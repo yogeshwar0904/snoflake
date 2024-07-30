@@ -1,0 +1,38 @@
+There is no need to write several separate queries because 
+SQL allows combining multiple CTEs in a single query with one
+of the SET operators, such as UNION or UNION ALL. Note the following rules
+for constructing a query with multiple CTEs: Only one WITH keyword is allowed.
+CTEs must be separated with commas.
+
+
+CREATE OR REPLACE PROCEDURE MY_DATABASE.PUBLIC.MULTIPLE_CTE_UNION_EXAMPLE()
+RETURNS TABLE(id NUMBER)
+LANGUAGE SQL
+AS 
+$$
+  DECLARE
+    res RESULTSET;
+    sql_query VARCHAR;
+BEGIN
+    
+    sql_query := 'WITH cte1 AS (
+        SELECT ID
+        FROM MY_DATABASE.PUBLIC.source_table1
+        WHERE Name = ''Bob'' 
+    ),
+    cte2 AS (
+        SELECT ID
+        FROM MY_DATABASE.PUBLIC.source_table2
+    )
+     SELECT * FROM cte1
+     UNION
+     SELECT * FROM cte2';
+    res := (EXECUTE IMMEDIATE :sql_query);
+    RETURN TABLE(res);
+END;
+$$;
+
+call  MY_DATABASE.PUBLIC.MULTIPLE_CTE_UNION_EXAMPLE();
+
+
+
